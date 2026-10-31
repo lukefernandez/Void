@@ -1,9 +1,5 @@
 import Foundation
 
-/// Day attribution, streaks, and daily totals for meditation sessions.
-///
-/// A session belongs to the local day it started. A sit from 11:45 PM to
-/// 12:05 AM stays on that evening, both in the day list and in the streak.
 enum PracticeLog {
   struct Interval: Equatable, Sendable {
     var start: Date
@@ -93,7 +89,6 @@ enum PracticeLog {
     return stats.reversed()
   }
 
-  /// Local midnight `days` before today, so the oldest day is not cut off mid-morning.
   static func queryStart(now: Date, calendar: Calendar, days: Int = 365) -> Date? {
     let today = calendar.startOfDay(for: now)
     return calendar.date(byAdding: .day, value: -days, to: today)
@@ -115,7 +110,6 @@ enum PracticeLog {
     return durationByDay
   }
 
-  /// Consecutive practiced days ending today, or yesterday if today has no session yet.
   private static func currentStreakDates(
     sessionDates: Set<Date>,
     today: Date,
