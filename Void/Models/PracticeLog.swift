@@ -2,11 +2,8 @@ import Foundation
 
 /// Day attribution, streaks, and daily totals for meditation sessions.
 ///
-/// History membership and the streak used to disagree. History listed any
-/// session that overlapped a local day, which is how HealthKit's default
-/// sample predicate behaves. The streak credited the local day the session
-/// started. A sit from 11:45 PM to 12:05 AM therefore showed up on the next
-/// morning and did not count toward the streak.
+/// A session belongs to the local day it started. A sit from 11:45 PM to
+/// 12:05 AM stays on that evening, both in the day list and in the streak.
 enum PracticeLog {
   struct Interval: Equatable, Sendable {
     var start: Date
@@ -33,16 +30,10 @@ enum PracticeLog {
     calendar.startOfDay(for: start)
   }
 
-  /// Whether a day detail list includes this session.
-  ///
-  /// This matches a HealthKit sample query with no strict start or end option.
-  /// Any overlap with the local day is enough.
   static func includes(_ interval: Interval, on day: Date, calendar: Calendar) -> Bool {
-    let dayStart = calendar.startOfDay(for: day)
-    guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else {
-      return false
-    }
-    return interval.start < dayEnd && interval.end > dayStart
+    guard counts(interval) else { return false }
+    return attributedDay(start: interval.start, calendar: calendar)
+      == calendar.startOfDay(for: day)
   }
 
   static func summary(
@@ -102,11 +93,14 @@ enum PracticeLog {
     return stats.reversed()
   }
 
-  /// Lower bound for the HealthKit history query.
-  ///
-  /// Measured from `now`, so the oldest day is cut off at the current time of day.
+  /// Local midnight `days` before today, so the oldest day is not cut off mid-morning.
   static func queryStart(now: Date, calendar: Calendar, days: Int = 365) -> Date? {
-    calendar.date(byAdding: .day, value: -days, to: now)
+    let today = calendar.startOfDay(for: now)
+    return calendar.date(byAdding: .day, value: -days, to: today)
+  }
+
+  private static func counts(_ interval: Interval) -> Bool {
+    interval.duration > 0
   }
 
   private static func durationsByDay(
@@ -114,7 +108,7 @@ enum PracticeLog {
     calendar: Calendar
   ) -> [Date: TimeInterval] {
     var durationByDay: [Date: TimeInterval] = [:]
-    for interval in intervals {
+    for interval in intervals where counts(interval) {
       let day = attributedDay(start: interval.start, calendar: calendar)
       durationByDay[day, default: 0] += interval.duration
     }

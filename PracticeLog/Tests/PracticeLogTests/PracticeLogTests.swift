@@ -154,6 +154,20 @@ final class PracticeLogTests: XCTestCase {
     XCTAssertEqual(summary.totalMinutesToday, 0, accuracy: 0.001)
     XCTAssertFalse(PracticeLog.includes(interval, on: start, calendar: calendar))
     XCTAssertFalse(summary.recentDays.contains { $0.isInCurrentStreak || $0.minutes > 0 })
+
+    let backwards = PracticeLog.Interval(start: start, end: start.addingTimeInterval(-30))
+    let withRealSit = PracticeLog.summary(
+      intervals: [
+        PracticeLog.Interval(start: date(2026, 4, 1, 20, 0), end: date(2026, 4, 1, 20, 20)),
+        interval,
+        backwards,
+      ],
+      now: date(2026, 4, 2, 18, 0),
+      calendar: calendar
+    )
+    XCTAssertEqual(withRealSit.streak, 1)
+    XCTAssertEqual(withRealSit.totalMinutesToday, 0, accuracy: 0.001)
+    XCTAssertFalse(PracticeLog.includes(backwards, on: start, calendar: calendar))
   }
 
   func testCurrentStreakCountsDaysBeyondTheVisibleGrid() {

@@ -133,7 +133,14 @@ class HealthKitClientLive {
     let calendar = Calendar.current
     let startOfDay = calendar.startOfDay(for: day)
     let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)
-    let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: endOfDay)
+    // Default options match any overlap, so a sit that started yesterday
+    // and ended after midnight was listed today. strictStartDate keeps the
+    // day the sit started, the same day PracticeLog.attributedDay returns.
+    let predicate = HKQuery.predicateForSamples(
+      withStart: startOfDay,
+      end: endOfDay,
+      options: .strictStartDate
+    )
     let samples = try await querySamples(type: mindfulType, predicate: predicate)
     let ownSource = HKSource.default()
 
