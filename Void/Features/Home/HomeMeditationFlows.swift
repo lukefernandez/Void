@@ -42,8 +42,11 @@ extension HomeReducer {
     
     let now = date.now
     let secondsElapsed = meditationState.elapsedTime.secondsElapsed(now: now)
-    let startDate = now.addingTimeInterval(-Double(secondsElapsed))
-    let shouldSaveMindfulnessSession = secondsElapsed > 10
+    let recorded = SessionRecording.intervalToRecord(
+      elapsedSeconds: secondsElapsed,
+      now: now,
+      plannedDurationSeconds: state.settings.settings.durationSeconds
+    )
 
     withAnimation(.spring) {
       state.settings.$expandedSection.withLock { $0 = nil }
@@ -52,16 +55,18 @@ extension HomeReducer {
     }
 
     return .merge(
-      shouldSaveMindfulnessSession
-        ? .run { send in
+      recorded.map { interval in
+        .run { send in
           do {
-            try await healthKitClient.saveMindfulnessSession(.init(startDate: startDate, endDate: now))
+            try await healthKitClient.saveMindfulnessSession(
+              .init(startDate: interval.start, endDate: interval.end)
+            )
           } catch {
             print("Failed to save mindfulness session: \(error)")
           }
           await send(.stats(.task))
         }
-        : .none,
+      } ?? .none,
       .run { _ in
         await audioManager.play(sound: .completionBell)
         await audioManager.setAmbient(nil)
