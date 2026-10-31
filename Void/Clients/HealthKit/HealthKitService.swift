@@ -151,7 +151,10 @@ class HealthKitClientLive {
         id: sample.uuid,
         startDate: sample.startDate,
         endDate: sample.endDate,
-        isEditable: sample.sourceRevision.source == ownSource
+        isEditable: SessionRecording.canEdit(
+          sampleBundleIdentifier: sample.sourceRevision.source.bundleIdentifier,
+          appBundleIdentifier: ownSource.bundleIdentifier
+        )
       )
     }
     .sorted { $0.startDate < $1.startDate }

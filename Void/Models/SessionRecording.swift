@@ -8,16 +8,20 @@ enum SessionRecording {
 
   /// The interval written when a sit ends. `nil` means the sit was too short to keep.
   ///
-  /// This still writes the whole elapsed span. The phone does not tick while locked,
-  /// so a 20 minute sit that finishes on the next wake includes the hours in between.
+  /// The phone does not tick while locked, so elapsed time can include sleep.
+  /// A planned sit ends when its timer was due. An open-ended sit stops at
+  /// `maximumOpenEndedSeconds`.
   static func intervalToRecord(
     elapsedSeconds: Int,
     now: Date,
     plannedDurationSeconds: Int?
   ) -> PracticeLog.Interval? {
     guard elapsedSeconds > minimumSavedSeconds else { return nil }
-    let start = now.addingTimeInterval(-Double(elapsedSeconds))
-    return PracticeLog.Interval(start: start, end: now)
+    let elapsed = TimeInterval(elapsedSeconds)
+    let cap = TimeInterval(plannedDurationSeconds ?? maximumOpenEndedSeconds)
+    let recorded = min(elapsed, max(cap, 0))
+    let start = now.addingTimeInterval(-elapsed)
+    return PracticeLog.Interval(start: start, end: start.addingTimeInterval(recorded))
   }
 
   static func canEdit(sampleBundleIdentifier: String, appBundleIdentifier: String) -> Bool {
