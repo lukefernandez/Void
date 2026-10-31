@@ -8,12 +8,6 @@
 import Foundation
 import HealthKit
 
-public struct Session: Identifiable {
-  public let id = UUID()
-  public let date: Date
-  public let duration: TimeInterval
-}
-
 enum HealthKitPermission: CustomStringConvertible {
   case authorized
   case denied
@@ -78,14 +72,14 @@ class HealthKitClientLive {
     try await healthStore.save(mindfulSession)
   }
 
-  func getDailyMindfulSessions() async throws -> [Session] {
+  func getDailyMindfulSessions() async throws -> [PracticeLog.Interval] {
     guard let mindfulType = HKObjectType.categoryType(forIdentifier: .mindfulSession) else {
       throw HealthKitServiceError.mindfulTypeUnavailable
     }
 
     let calendar = Calendar.current
     let now = Date()
-    guard let startDate = calendar.date(byAdding: .day, value: -365, to: now) else {
+    guard let startDate = PracticeLog.queryStart(now: now, calendar: calendar) else {
       throw HealthKitServiceError.failedToCalculateStartDate
     }
 
@@ -120,16 +114,9 @@ class HealthKitClientLive {
           return
         }
 
-        let groupedSessions = Dictionary(grouping: samples) {
-          calendar.startOfDay(for: $0.startDate)
+        let sessions = samples.map { sample in
+          PracticeLog.Interval(start: sample.startDate, end: sample.endDate)
         }
-
-        let sessions = groupedSessions.map { date, samples in
-          let totalDuration = samples.reduce(0) {
-            $0 + $1.endDate.timeIntervalSince($1.startDate)
-          }
-          return Session(date: date, duration: totalDuration)
-        }.sorted { $0.date > $1.date }
 
         continuation.resume(returning: sessions)
       }
@@ -146,16 +133,28 @@ class HealthKitClientLive {
     let calendar = Calendar.current
     let startOfDay = calendar.startOfDay(for: day)
     let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)
-    let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: endOfDay)
+    // Default options match any overlap, so a sit that started yesterday
+    // and ended after midnight was listed today. strictStartDate keeps the
+    // day the sit started, the same day PracticeLog.attributedDay returns.
+    let predicate = HKQuery.predicateForSamples(
+      withStart: startOfDay,
+      end: endOfDay,
+      options: .strictStartDate
+    )
     let samples = try await querySamples(type: mindfulType, predicate: predicate)
     let ownSource = HKSource.default()
 
-    return samples.map { sample in
-      MindfulSessionSample(
+    return samples.compactMap { sample in
+      let interval = PracticeLog.Interval(start: sample.startDate, end: sample.endDate)
+      guard PracticeLog.includes(interval, on: day, calendar: calendar) else { return nil }
+      return MindfulSessionSample(
         id: sample.uuid,
         startDate: sample.startDate,
         endDate: sample.endDate,
-        isEditable: sample.sourceRevision.source == ownSource
+        isEditable: SessionRecording.canEdit(
+          sampleBundleIdentifier: sample.sourceRevision.source.bundleIdentifier,
+          appBundleIdentifier: ownSource.bundleIdentifier
+        )
       )
     }
     .sorted { $0.startDate < $1.startDate }

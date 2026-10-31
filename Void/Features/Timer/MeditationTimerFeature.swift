@@ -97,10 +97,8 @@ struct MeditationTimerFeature {
       return .none
     }
 
-    /// If there's a max duration and we've reached it, stop the timer flow.
-    if let durationSeconds = state.settings.durationSeconds,
-       secondsElapsed >= durationSeconds
-    {
+    let limit = state.settings.durationSeconds ?? SessionRecording.maximumOpenEndedSeconds
+    if secondsElapsed >= limit {
       return .run { send in
         await send(.delegate(.timerCompleted), animation: .spring)
       }
