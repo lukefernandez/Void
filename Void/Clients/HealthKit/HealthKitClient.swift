@@ -13,7 +13,7 @@ struct HealthKitClient: Sendable {
   var isAuthorized: @Sendable () -> Bool = { false }
   var requestAuthorization: @Sendable () async throws -> HealthKitPermission
   var saveMindfulnessSession: @Sendable (_ mindfulSession: MindfulSession) async throws -> Void
-  var getDailyMindfulSessions: @Sendable () async throws -> [Session]
+  var getDailyMindfulSessions: @Sendable () async throws -> [PracticeLog.Interval]
   var getSessions: @Sendable (_ day: Date) async throws -> [MindfulSessionSample]
   var deleteMindfulSession: @Sendable (_ id: UUID) async throws -> Void
   var updateMindfulSession: @Sendable (_ id: UUID, _ mindfulSession: MindfulSession) async throws -> Void

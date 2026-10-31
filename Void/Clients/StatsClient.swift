@@ -64,104 +64,25 @@ struct StatsClientLive: Sendable {
 
   @Sendable
   func getDailyStats() async throws -> DailyStats {
-    let sessions = try await healthKitClient.getDailyMindfulSessions()
+    let intervals = try await healthKitClient.getDailyMindfulSessions()
+    let summary = PracticeLog.summary(intervals: intervals, now: Date(), calendar: .current)
     return DailyStats(
-      streak: calculateStreak(from: sessions),
-      totalMinutesToday: calculateTotalMinutesToday(from: sessions),
-      recentPracticeDays: calculateRecentPracticeDays(from: sessions)
+      streak: summary.streak,
+      totalMinutesToday: summary.totalMinutesToday,
+      recentPracticeDays: summary.recentDays.map { day in
+        PracticeDay(
+          date: day.date,
+          minutes: day.minutes,
+          isInCurrentStreak: day.isInCurrentStreak
+        )
+      }
     )
   }
 
   @Sendable
   func getWeeklyStats() async throws -> [Double] {
-    let sessions = try await healthKitClient.getDailyMindfulSessions()
-    return calculateWeeklyStats(from: sessions)
-  }
-
-  // MARK: - Private Calculation Methods
-
-  private func calculateTotalMinutesToday(from sessions: [Session]) -> Double {
-    let calendar = Calendar.current
-    let today = calendar.startOfDay(for: Date())
-    return sessions
-      .filter { calendar.startOfDay(for: $0.date) == today }
-      .reduce(0.0) { $0 + $1.duration / 60 }
-  }
-
-  private func calculateStreak(from sessions: [Session]) -> Int {
-    calculateCurrentStreakDates(from: sessions).count
-  }
-
-  private func calculateCurrentStreakDates(from sessions: [Session]) -> Set<Date> {
-    let calendar = Calendar.current
-    let today = calendar.startOfDay(for: Date())
-
-    let sessionDates = Set(sessions.map { calendar.startOfDay(for: $0.date) })
-    guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else {
-      return sessionDates.contains(today) ? [today] : []
-    }
-
-    guard sessionDates.contains(today) || sessionDates.contains(yesterday) else {
-      return []
-    }
-
-    var currentDate = sessionDates.contains(today) ? today : yesterday
-    var streakDates: Set<Date> = [currentDate]
-
-    while let previousDay = calendar.date(byAdding: .day, value: -1, to: currentDate) {
-      if sessionDates.contains(previousDay) {
-        streakDates.insert(previousDay)
-        currentDate = previousDay
-      } else {
-        break
-      }
-    }
-
-    return streakDates
-  }
-
-  private func calculateRecentPracticeDays(from sessions: [Session], dayCount: Int = 42) -> [PracticeDay] {
-    let calendar = Calendar.current
-    let today = calendar.startOfDay(for: Date())
-    let streakDates = calculateCurrentStreakDates(from: sessions)
-    let minutesByDay = sessions.reduce(into: [Date: Double]()) { result, session in
-      result[calendar.startOfDay(for: session.date)] = session.duration / 60
-    }
-
-    return (0 ..< dayCount).compactMap { offset in
-      guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else {
-        return nil
-      }
-
-      let day = calendar.startOfDay(for: date)
-      return PracticeDay(
-        date: day,
-        minutes: minutesByDay[day] ?? 0,
-        isInCurrentStreak: streakDates.contains(day)
-      )
-    }
-  }
-
-  private func calculateWeeklyStats(from sessions: [Session]) -> [Double] {
-    let calendar = Calendar.current
-    let today = calendar.startOfDay(for: Date())
-    var stats: [Double] = Array(repeating: 0, count: 52)
-
-    for weekOffset in 0 ..< 52 {
-      guard let weekStart = calendar.date(byAdding: .weekOfYear, value: -weekOffset, to: today),
-            let weekEnd = calendar.date(byAdding: .weekOfYear, value: 1, to: weekStart) else { continue }
-
-      let weekMinutes = sessions
-        .filter {
-          let date = calendar.startOfDay(for: $0.date)
-          return date >= weekStart && date < weekEnd
-        }
-        .reduce(0.0) { $0 + $1.duration / 60 }
-
-      stats[weekOffset] = weekMinutes
-    }
-
-    return stats.reversed()
+    let intervals = try await healthKitClient.getDailyMindfulSessions()
+    return PracticeLog.weeklyMinutes(intervals: intervals, now: Date(), calendar: .current)
   }
 }
 
